@@ -6,6 +6,8 @@
     <!-- مكتبة Firebase للاتصال بقاعدة بيانات لوحتك -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <!-- مكتبة Tesseract.js للتعرف البصري القوي على الحروف والصور داخل المتصفح مباشرة -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
             --bg: #f8fafc; --card-bg: #ffffff; --accent: #059669;
@@ -32,7 +34,7 @@
         .score-card h2 { margin: 0; font-size: 1.8rem; }
         .score-card p { margin: 5px 0 0 0; font-size: 0.95rem; opacity: 0.9; }
 
-        /* أقسام العرض بترتيب ورقة الاختبار */
+        /* أقسام العرض بترتيب ورقة الاختبار (عمودين: اليمين 1-10، اليسار 11-20) */
         .section-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
         
         .grid-columns-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -41,13 +43,18 @@
         .ans-card { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; }
         .ans-card span { font-size: 0.85rem; font-weight: bold; color: var(--accent); }
         
+        /* أزرار خيارات الطالب ونموذج الإجابة (أ، ب، ج، د) */
         .options-group { display: flex; gap: 4px; }
         .opt-btn { background: #f1f5f9; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; font-size: 0.8rem; font-weight: bold; cursor: pointer; color: #334155; }
         
+        /* ألوان التمييز لخيارات الطالب */
         .opt-btn.active-correct { background: #059669 !important; color: white !important; border-color: #059669 !important; }
         .opt-btn.active-wrong { background: #f97316 !important; color: white !important; border-color: #f97316 !important; }
+        
+        /* أزرار نموذج الإجابة المعتمد بلون مميز وثابت */
         .model-btn.active { background: #047857 !important; color: white !important; border-color: #047857 !important; }
 
+        /* لوحة التغذية الراجعة */
         .diff-grid { display: grid; grid-template-columns: repeat(1, 1fr); gap: 8px; max-height: 280px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
         .diff-item { padding: 12px; border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
         .diff-item.match { background: #ecfdf5; border-color: #10b981; color: #065f46; }
@@ -58,26 +65,40 @@
         .clear-btn { background: #ef4444; color: white; border: none; padding: 10px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
         .clear-btn:hover { background: #dc2626; }
 
-        /* زر التصوير البصري المباشر */
-        .camera-upload-btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 12px 20px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2); }
-        .camera-upload-btn:hover { background: #1e40af; }
+        /* أزرار رفع الصورة */
+        .upload-btn-label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #0284c7; color: white; border-radius: 8px; padding: 10px 16px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
+        .upload-btn-label:hover { background: #0369a1; }
 
         .submit-btn { width: 100%; background: #059669; color: white; border: none; padding: 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.2s; }
         .submit-btn:hover { background: #047857; }
         
+        /* تصميم النوافذ المنبثقة (Modals) */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        
         .alert-box-red { background: #ffffff; border: 4px solid #dc2626; border-radius: 16px; width: 90%; max-width: 450px; padding: 25px; text-align: center; box-shadow: 0 10px 25px rgba(220, 38, 38, 0.3); animation: shake 0.3s ease-in-out; }
         .alert-box-red h3 { color: #dc2626; font-size: 1.4rem; margin-top: 0; margin-bottom: 10px; }
         .alert-box-red p { color: #1e293b; font-size: 1rem; line-height: 1.6; margin-bottom: 20px; font-weight: bold; }
         .alert-btn-red { background: #dc2626; color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s; }
-        
+        .alert-btn-red:hover { background: #b91c1c; }
+
         .alert-box-green { background: #ffffff; border: 4px solid #059669; border-radius: 16px; width: 90%; max-width: 450px; padding: 25px; text-align: center; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3); animation: popUp 0.3s ease-in-out; }
         .alert-box-green h3 { color: #059669; font-size: 1.4rem; margin-top: 0; margin-bottom: 10px; }
         .alert-box-green p { color: #1e293b; font-size: 1rem; line-height: 1.6; margin-bottom: 20px; font-weight: bold; }
         .alert-btn-green { background: #059669; color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+        .alert-btn-green:hover { background: #047857; }
 
-        @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-6px); } 100% { transform: translateX(0); } }
-        @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            50% { transform: translateX(6px); }
+            75% { transform: translateX(-6px); }
+            100% { transform: translateX(0); }
+        }
+
+        @keyframes popUp {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
         .footer-note { text-align: center; font-size: 0.75rem; color: var(--text-sub); margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px; }
     </style>
@@ -86,7 +107,9 @@
 
 <div class="scanner-container">
     <h1>📷 أداة التصحيح والتغذية الراجعة المفصلة</h1>
-    <p class="subtitle">✨ أ / عبدالعزيز الفيفي - ثانوية الأمير عبدالمجيد 🎓 2026</p>
+    <p class="subtitle">
+        ✨ أ / عبدالعزيز الفيفي - ثانوية الأمير عبدالمجيد 🎓 2026
+    </p>
 
     <!-- 1. اختيار النموذج الرئيسي للرصد -->
     <div class="form-group" style="background: #ecfdf5; padding: 15px; border-radius: 12px; border: 1px solid #a7f3d0;">
@@ -101,69 +124,77 @@
         </select>
     </div>
 
-    <!-- 2. اختيار اسم الطالب -->
+    <!-- 2. اختيار اسم الطالب في المقدمة -->
     <div class="form-group" style="background: #e0f2fe; padding: 15px; border-radius: 12px; border: 1px solid #bae6fd;">
-        <label style="color: #0369a1; font-size: 1rem; margin-bottom: 8px;">2️⃣ ابحث عن اسم الطالب:</label>
+        <label style="color: #0369a1; font-size: 1rem; margin-bottom: 8px;">2️⃣ ابحث عن اسم الطالب (بأي جزء من الاسم: الأول، الأب، أو العائلة):</label>
         <div class="student-select-box">
             <input type="text" id="studentSearchInput" class="student-search-input" placeholder="اكتب أي جزء من اسم الطالب للبحث..." oninput="filterStudents()" onclick="showDropdown()">
             <div id="studentDropdownList" class="student-dropdown-list"></div>
         </div>
     </div>
 
+    <!-- خيار استعراض النماذج المتاحة للطالب -->
     <div class="form-group" id="studentModelsGroup" style="display: none; background: #fef3c7; padding: 15px; border-radius: 12px; border: 1px solid #f59e0b;">
-        <label style="color: #b45309; font-size: 1rem; margin-bottom: 8px;">📂 نماذج الاختبارات المتاحة:</label>
-        <select id="studentSavedModelsSelector" onchange="loadStudentSpecificModel(this.value)" style="border-color: #f59e0b; font-weight: bold; color: #b45309;"></select>
+        <label style="color: #b45309; font-size: 1rem; margin-bottom: 8px;">📂 نماذج الاختبارات المتاحة (اختر نموذجاً لاستعراض إجابات الطالب إن وجدت):</label>
+        <select id="studentSavedModelsSelector" onchange="loadStudentSpecificModel(this.value)" style="border-color: #f59e0b; font-weight: bold; color: #b45309;">
+        </select>
     </div>
 
-    <!-- 3. المساعد الذكي + التصوير المباشر -->
+    <!-- 3. نافذة التعبئة الفورية المرفقة بخيار الصورة -->
     <div class="ai-helper-box">
-        <label style="color: #047857; margin-bottom: 8px;">3️⃣ التصحيح الذكي المباشر بالكاميرا أو الإدخال الفوري:</label>
-        
-        <!-- زر اختيار الصورة أو التقاطها مباشرة -->
-        <input type="file" id="cameraFileInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageAutoScan(event)">
-        <button type="button" class="camera-upload-btn" onclick="document.getElementById('cameraFileInput').click()">
-            📸 اضغط هنا لتصوير ورقة الطالب أو رفعها لتصحيحها فوراً
-        </button>
-
-        <p style="font-size: 0.82rem; color: #065f46; margin-top: 5px; margin-bottom: 10px;" id="inputCounterStatus">
+        <label style="color: #047857; margin-bottom: 5px;">3️⃣ خانة إدخال الإجابات الفورية أو ارفاق صورة الورقة:</label>
+        <p style="font-size: 0.82rem; color: #065f46; margin-top: 0; margin-bottom: 10px;" id="inputCounterStatus">
             المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: 0 / 20):
         </p>
+        
+        <!-- قسم إضافة ارفاق الصورة -->
+        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label for="imageUploader" class="upload-btn-label">
+                📷 ارفق أو صور ورقة الإجابة
+            </label>
+            <input type="file" id="imageUploader" accept="image/*" onchange="processUploadedImage(event)" style="display: none;">
+            <span id="ocrLoaderStatus" style="font-size: 0.85rem; color: #0369a1; font-weight: bold;"></span>
+        </div>
+
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <input type="text" id="quickPasteInput" placeholder="سيتم تعبئة الحروف تلقائياً عند القراءة أو يمكنك كتابتها..." style="flex: 1; padding: 10px; border: 1px solid #10b981; border-radius: 8px; font-size: 1rem;" oninput="applyInstantPaste()">
+            <input type="text" id="quickPasteInput" placeholder="اكتب الحروف هنا أو ألصقها أو ارفق صورة ورقة الإجابة..." style="flex: 1; padding: 10px; border: 1px solid #10b981; border-radius: 8px; font-size: 1rem;" oninput="applyInstantPaste()">
             <button type="button" class="clear-btn" onclick="clearQuickPaste()">🗑️ تصفير الحقل</button>
         </div>
     </div>
 
-    <!-- 4. تظليل إجابات الطالب -->
+    <!-- 4. تظليل إجابات الطالب اللحظية -->
     <div class="section-box" style="border-color: #10b981; background: #f0fdf4;">
-        <label style="color: #047857; margin-bottom: 8px;">4️⃣ إجابات الطالب (تتحدث لحظياً):</label>
+        <label style="color: #047857; margin-bottom: 8px;">4️⃣ إجابات الطالب (تتحدث لحظياً حسب الإدخال أو الضغط اليدوي):</label>
         <div class="grid-columns-container" id="studentAnswersContainer"></div>
     </div>
 
-    <!-- 5. مفاتيح النموذج المعتمد -->
+    <!-- 5. مفاتيح الإجابة النموذجية المعتمدة -->
     <div class="section-box" style="border-color: #059669; background: #ecfdf5;">
         <label style="color: #065f46; margin-bottom: 8px;">5️⃣ مفاتيح النموذج المعتمد الثابتة:</label>
         <div class="grid-columns-container" id="modelKeyContainer"></div>
     </div>
 
-    <!-- النتيجة الفورية -->
+    <!-- بطاقة عرض النتيجة الفورية -->
     <div class="score-card">
         <h2 id="liveScoreDisplay">0 من 20 (0%)</h2>
         <p>🎯 نتيجة الطالب الفورية بالمقارنة مع النموذج المعتمد</p>
     </div>
 
-    <!-- التغذية الراجعة -->
+    <!-- لوحة التغذية الراجعة المفصلة -->
     <div class="form-group">
-        <label>📖 تقرير التغذية الراجعة المفصلة:</label>
+        <label>📖 تقرير التغذية الراجعة المفصلة (نص السؤال، إجابة الطالب، والإجابة الصحيحة):</label>
         <div class="diff-grid" id="diffGridContainer"></div>
     </div>
 
     <!-- 6. اعتماد وإرسال -->
     <button class="submit-btn" onclick="processAndSendToDashboard()">6️⃣ اعتماد النتيجة وإرسالها لوحة التحكم</button>
 
-    <div class="footer-note">✨ أ / عبدالعزيز الفيفي - ثانوية الأمير عبدالمجيد 🎓 الحقوق محفوظة 2026</div>
+    <div class="footer-note">
+        ✨ أ / عبدالعزيز الفيفي - ثانوية الأمير عبدالمجيد 🎓 الحقوق محفوظة 2026
+    </div>
 </div>
 
+<!-- نافذة التنبيه الحمراء -->
 <div id="alertModalRed" class="modal-overlay">
     <div class="alert-box-red">
         <h3>🚨 تنبيه هام!</h3>
@@ -172,6 +203,7 @@
     </div>
 </div>
 
+<!-- نافذة الاعتماد الخضراء -->
 <div id="alertModalGreen" class="modal-overlay">
     <div class="alert-box-green">
         <h3>✅ تم اعتماد النتيجة بنجاح!</h3>
@@ -231,76 +263,55 @@
     };
 
     window.onload = function() {
-        for (let i = 1; i <= 20; i++) studentAnswersState[i] = '';
+        for (let i = 1; i <= 20; i++) {
+            studentAnswersState[i] = '';
+        }
         buildGrids();
         loadAllowedStudents();
         updateComparison();
     };
 
-    /* --- دالة التصوير والمسح الآلي بواسطة AI المباشر --- */
-    async function handleImageAutoScan(event) {
+    // دالة معالجة واستخراج الحروف من الصورة المرفوقة
+    async function processUploadedImage(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        const counterStatus = document.getElementById('inputCounterStatus');
-        counterStatus.innerText = "⏳ جاري قراءة الصورة بواسطة الذكاء الاصطناعي...";
+        const statusSpan = document.getElementById('ocrLoaderStatus');
+        statusSpan.innerText = "⏳ جاري قراءة ورقة الإجابة...";
 
         try {
-            const base64Data = await convertFileToBase64(file);
-            
-            // استدعاء المساعد الفوري لتحليل الصورة
-            const promptText = "اقرأ جدول تظليل إجابات الطالب المكون من 20 سؤالاً. استخرج الحروف المظللة فقط بالترتيب من 1 إلى 20 واكتبها متسلسلة كحروف عربية (مثال: أ أ ب ج ب أ...). إن وجدت اسم الطالب اكتبه أولاً ثم ضع نقطتين ثم الحروف.";
-            
-            // محاكاة تحويل الصورة للنتيجة الفورية
-            fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${firebaseConfig.apiKey}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: promptText },
-                            { inline_data: { mime_type: file.type, data: base64Data.split(',')[1] } }
-                        ]
-                    }]
-                })
-            }).then(res => res.json()).then(data => {
-                let textResult = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                
-                // استخراج الاسم إن وجد واستخراج الحروف
-                if (textResult.includes(":")) {
-                    let parts = textResult.split(":");
-                    let possibleName = parts[0].trim();
-                    if (possibleName) {
-                        document.getElementById('studentSearchInput').value = possibleName;
-                        filterStudents();
-                    }
-                    textResult = parts[1];
-                }
+            const worker = await Tesseract.createWorker('ara');
+            const ret = await worker.recognize(file);
+            await worker.terminate();
 
-                document.getElementById('quickPasteInput').value = textResult;
-                applyInstantPaste();
-            }).catch(err => {
-                // في حال عدم الربط المباشر بمفتاح API، تتم التعبئة التجريبية للفحص
-                applyInstantPaste();
-            });
+            const text = ret.data.text;
+            let extractedAns = "";
 
+            for (let i = 0; i < text.length; i++) {
+                let ch = text[i];
+                if (['أ', 'إ', 'آ', 'ا'].includes(ch)) extractedAns += 'أ ';
+                else if (ch === 'ب') extractedAns += 'ب ';
+                else if (ch === 'ج') extractedAns += 'ج ';
+                else if (ch === 'د') extractedAns += 'د ';
+            }
+
+            if (extractedAns.trim().length > 0) {
+                document.getElementById('quickPasteInput').value = extractedAns.trim();
+                applyInstantPaste();
+                statusSpan.innerText = "✅ تم استخراج الإجابات بنجاح!";
+            } else {
+                statusSpan.innerText = "⚠️ لم يتم التعرف على الحروف، يرجى التأكد من وضوح الصورة.";
+            }
         } catch (e) {
-            alert("حدث خطأ أثناء معالجة الصورة. يرجى إعادتها.");
+            statusSpan.innerText = "❌ حدث خطأ أثناء معالجة الصورة.";
         }
-    }
-
-    function convertFileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
-        });
     }
 
     function switchModel(modelKey) {
         currentModelKey = modelKey;
-        for (let i = 1; i <= 20; i++) studentAnswersState[i] = '';
+        for (let i = 1; i <= 20; i++) {
+            studentAnswersState[i] = '';
+        }
         document.getElementById('quickPasteInput').value = '';
         document.getElementById('inputCounterStatus').innerText = "المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: 0 / 20):";
         buildGrids();
@@ -310,14 +321,18 @@
     function buildGrids() {
         const studentContainer = document.getElementById('studentAnswersContainer');
         const modelContainer = document.getElementById('modelKeyContainer');
-        studentContainer.innerHTML = ''; modelContainer.innerHTML = '';
+        
+        studentContainer.innerHTML = '';
+        modelContainer.innerHTML = '';
 
         const keys = ['A', 'B', 'C', 'D'];
         const labels = {'A':'أ', 'B':'ب', 'C':'ج', 'D':'د'};
         const currentQuestions = modelsData[currentModelKey]?.questions || modelsData['modelA'].questions;
 
-        let rightColStudent = '<div class="sub-column">', leftColStudent = '<div class="sub-column">';
-        let rightColModel = '<div class="sub-column">', leftColModel = '<div class="sub-column">';
+        let rightColStudent = '<div class="sub-column">';
+        let leftColStudent = '<div class="sub-column">';
+        let rightColModel = '<div class="sub-column">';
+        let leftColModel = '<div class="sub-column">';
 
         for (let i = 1; i <= 20; i++) {
             let currentVal = studentAnswersState[i];
@@ -332,7 +347,12 @@
                 studentOptHtml += `<button type="button" class="${activeClass}" onclick="setStudentAns(${i}, '${k}')">${labels[k]}</button>`;
             });
 
-            let studentCardHtml = `<div class="ans-card"><span>س ${i}</span><div class="options-group">${studentOptHtml}</div></div>`;
+            let studentCardHtml = `
+                <div class="ans-card">
+                    <span>س ${i}</span>
+                    <div class="options-group">${studentOptHtml}</div>
+                </div>
+            `;
 
             let modelOptHtml = '';
             keys.forEach(k => {
@@ -340,49 +360,98 @@
                 modelOptHtml += `<button type="button" class="${activeClass}" disabled>${labels[k]}</button>`;
             });
 
-            let modelCardHtml = `<div class="ans-card" style="background:#ecfdf5;"><span>س ${i}</span><div class="options-group">${modelOptHtml}</div></div>`;
+            let modelCardHtml = `
+                <div class="ans-card" style="background:#ecfdf5;">
+                    <span>س ${i}</span>
+                    <div class="options-group">${modelOptHtml}</div>
+                </div>
+            `;
 
             if (i <= 10) {
-                rightColStudent += studentCardHtml; rightColModel += modelCardHtml;
+                rightColStudent += studentCardHtml;
+                rightColModel += modelCardHtml;
             } else {
-                leftColStudent += studentCardHtml; leftColModel += modelCardHtml;
+                leftColStudent += studentCardHtml;
+                leftColModel += modelCardHtml;
             }
         }
 
-        studentContainer.innerHTML = rightColStudent + '</div>' + leftColStudent + '</div>';
-        modelContainer.innerHTML = rightColModel + '</div>' + leftColModel + '</div>';
+        rightColStudent += '</div>';
+        leftColStudent += '</div>';
+        rightColModel += '</div>';
+        leftColModel += '</div>';
+
+        studentContainer.innerHTML = rightColStudent + leftColStudent;
+        modelContainer.innerHTML = rightColModel + leftColModel;
     }
 
     function setStudentAns(qNum, ansKey) {
         studentAnswersState[qNum] = ansKey;
+        
         let updatedText = '';
-        for (let i = 1; i <= 20; i++) if (studentAnswersState[i]) updatedText += studentAnswersState[i];
+        for (let i = 1; i <= 20; i++) {
+            let val = studentAnswersState[i];
+            if (val) {
+                updatedText += val;
+            }
+        }
         document.getElementById('quickPasteInput').value = updatedText;
-        applyInstantPaste();
+        
+        let count = updatedText.length;
+        let statusText = `المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: ${count} / 20):`;
+        if (count === 20) {
+            statusText += " ✅ تم اكتمال الإدخال بنجاح!";
+        }
+        document.getElementById('inputCounterStatus').innerText = statusText;
+
+        buildGrids();
+        updateComparison();
     }
 
     function applyInstantPaste() {
         let inputField = document.getElementById('quickPasteInput');
         let text = inputField.value;
+        
         let cleaned = '';
-
         for (let i = 0; i < text.length; i++) {
             let ch = text[i];
-            if ([' ', '\t', '\n', '\r'].includes(ch)) continue;
+            if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') continue;
 
-            if (['أ', 'إ', 'آ', 'ا', 'A', 'a'].includes(ch)) cleaned += 'A';
-            else if (['ب', 'B', 'b'].includes(ch)) cleaned += 'B';
-            else if (['ج', 'C', 'c'].includes(ch)) cleaned += 'C';
-            else if (['د', 'D', 'd'].includes(ch)) cleaned += 'D';
+            if (['أ', 'إ', 'آ', 'ا', 'A', 'a'].includes(ch)) {
+                cleaned += 'A';
+            } else if (['ب', 'B', 'b'].includes(ch)) {
+                cleaned += 'B';
+            } else if (['ج', 'C', 'c'].includes(ch)) {
+                cleaned += 'C';
+            } else if (['د', 'D', 'd'].includes(ch)) {
+                cleaned += 'D';
+            }
             
-            if (cleaned.length >= 20) break;
+            if (cleaned.length >= 20) {
+                cleaned = cleaned.substring(0, 20);
+                break;
+            }
+        }
+
+        if (inputField.value !== cleaned) {
+            inputField.value = cleaned;
         }
 
         let count = cleaned.length;
-        document.getElementById('inputCounterStatus').innerText = `المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: ${count} / 20)${count === 20 ? ' ✅ تم الاكتمال!' : ''}`;
-
+        let statusText = `المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: ${count} / 20):`;
+        if (count === 20) {
+            statusText += " ✅ تم اكتمال الإدخال بنجاح!";
+        }
+        document.getElementById('inputCounterStatus').innerText = statusText;
+        
+        let index = 0;
         for (let i = 1; i <= 20; i++) {
-            studentAnswersState[i] = (i <= cleaned.length) ? cleaned[i-1] : '';
+            if (index < cleaned.length) {
+                studentAnswersState[i] = cleaned[index];
+                index++;
+            } else {
+                studentAnswersState[i] = ''; 
+            }
         }
         buildGrids();
         updateComparison();
@@ -390,8 +459,11 @@
 
     function clearQuickPaste() {
         document.getElementById('quickPasteInput').value = '';
+        document.getElementById('ocrLoaderStatus').innerText = '';
         document.getElementById('inputCounterStatus').innerText = "المنطقة مخصصة لـ 20 إجابة (المدخل حالياً: 0 / 20):";
-        for (let i = 1; i <= 20; i++) studentAnswersState[i] = '';
+        for (let i = 1; i <= 20; i++) {
+            studentAnswersState[i] = '';
+        }
         buildGrids();
         updateComparison();
     }
@@ -399,6 +471,7 @@
     function updateComparison() {
         const diffContainer = document.getElementById('diffGridContainer');
         diffContainer.innerHTML = '';
+
         let score = 0;
         const currentQuestions = modelsData[currentModelKey]?.questions || modelsData['modelA'].questions;
         const labelsMap = {'A':'أ', 'B':'ب', 'C':'ج', 'D':'د'};
@@ -408,18 +481,29 @@
             const qData = currentQuestions[i-1] || { q: `سؤال ${i}`, options: {A:'أ',B:'ب',C:'ج',D:'د'}, ans:'A' };
             const correctKey = qData.ans;
             
-            if (!studentKey) continue;
+            if (!studentKey) continue; 
+
             const isMatch = (studentKey === correctKey);
             if (isMatch) score++;
 
+            let studentText = qData.options[studentKey] || studentKey;
+            let correctText = qData.options[correctKey] || correctKey;
+
+            const itemClass = isMatch ? 'diff-item match' : 'diff-item diff';
+            const statusText = isMatch ? '🟢 إجابة صحيحة' : '🔴 إجابة خاطئة';
+
             diffContainer.innerHTML += `
-                <div class="diff-item ${isMatch ? 'match' : 'diff'}">
+                <div class="${itemClass}">
                     <div style="display:flex; justify-content:space-between; font-weight:bold;">
                         <span>${qData.q}</span>
-                        <span>${isMatch ? '🟢 إجابة صحيحة' : '🔴 إجابة خاطئة'}</span>
+                        <span>${statusText}</span>
                     </div>
-                    <div>👤 إجابة الطالب: (${labelsMap[studentKey]})</div>
-                    <div>✅ الجواب الصحيح: (${labelsMap[correctKey]})</div>
+                    <div style="font-size:0.85rem;">
+                        👤 <strong style="${isMatch ? '' : 'color: #c2410c;'}">إجابة الطالب:</strong> (${labelsMap[studentKey]}) ${studentText}
+                    </div>
+                    <div style="font-size:0.85rem;">
+                        ✅ <strong style="color: #047857;">الجواب الصحيح:</strong> (${labelsMap[correctKey]}) ${correctText}
+                    </div>
                 </div>
             `;
         }
@@ -430,13 +514,24 @@
 
     function normalizeText(text) {
         if (!text) return "";
-        return text.trim().toLowerCase().replace(/[إأآا]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي").replace(/\b(بن|ابن)\b/g, "").replace(/\s+/g, " ");
+        return text
+            .trim()
+            .toLowerCase()
+            .replace(/[إأآا]/g, "ا")
+            .replace(/ة/g, "ه")
+            .replace(/ى/g, "ي")
+            .replace(/\b(بن|ابن)\b/g, "")
+            .replace(/عبد\s+/g, "عبد")
+            .replace(/\s+/g, " ");
     }
 
     function loadAllowedStudents() {
         db.collection("allowed_students").orderBy("name").get().then((snapshot) => {
             allStudents = [];
-            snapshot.forEach((doc) => { if(doc.data().name) allStudents.push(doc.data().name); });
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if(data.name) allStudents.push(data.name);
+            });
             renderStudentDropdown(allStudents);
         });
     }
@@ -444,6 +539,10 @@
     function renderStudentDropdown(studentsArray) {
         const listDiv = document.getElementById('studentDropdownList');
         listDiv.innerHTML = '';
+        if (studentsArray.length === 0) {
+            listDiv.innerHTML = '<div class="student-item" style="color:#999;">لا توجد نتائج مطابقة</div>';
+            return;
+        }
         studentsArray.forEach(name => {
             const item = document.createElement('div');
             item.className = 'student-item';
@@ -459,17 +558,40 @@
     function filterStudents() {
         const query = document.getElementById('studentSearchInput').value.trim();
         const queryNormalized = normalizeText(query);
-        if (!queryNormalized) { renderStudentDropdown(allStudents); return; }
-        const queryTokens = queryNormalized.split(" ");
-        const filtered = allStudents.filter(name => queryTokens.every(token => normalizeText(name).includes(token)));
+        
+        if (!queryNormalized) {
+            renderStudentDropdown(allStudents);
+            document.getElementById('studentDropdownList').style.display = 'block';
+            return;
+        }
+
+        const queryTokens = queryNormalized.split(" ").filter(t => t.length > 0);
+
+        const filtered = allStudents.filter(name => {
+            const nameNormalized = normalizeText(name);
+            return queryTokens.every(token => nameNormalized.includes(token));
+        });
+        
         renderStudentDropdown(filtered);
         document.getElementById('studentDropdownList').style.display = 'block';
     }
 
-    function showDropdown() { document.getElementById('studentDropdownList').style.display = 'block'; }
+    function showDropdown() {
+        document.getElementById('studentDropdownList').style.display = 'block';
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.student-select-box')) {
+            document.getElementById('studentDropdownList').style.display = 'none';
+        }
+    });
 
     function showModal(modalId, text) {
-        document.getElementById(modalId === 'alertModalRed' ? 'alertModalRedText' : 'alertModalGreenText').innerHTML = text;
+        if (modalId === 'alertModalRed') {
+            document.getElementById('alertModalRedText').innerHTML = text;
+        } else {
+            document.getElementById('alertModalGreenText').innerHTML = text;
+        }
         document.getElementById(modalId).style.display = 'flex';
     }
 
@@ -478,13 +600,67 @@
         if (modalId === 'alertModalGreen') {
             clearQuickPaste();
             document.getElementById('studentSearchInput').value = '';
+            document.getElementById('studentModelsGroup').style.display = 'none';
         }
     }
 
     async function processAndSendToDashboard() {
         const studentName = document.getElementById('studentSearchInput').value.trim();
-        if (!studentName) { showModal('alertModalRed', '⚠️ الرجاء اختيار اسم الطالب أولاً.'); return; }
-        showModal('alertModalGreen', `✅ تم رصد درجة الطالب: <strong>${studentName}</strong> بنجاح في لوحة التحكم!`);
+        const quickInputVal = document.getElementById('quickPasteInput').value.trim();
+        const customModelName = modelsData[currentModelKey].name;
+
+        if (!studentName) {
+            showModal('alertModalRed', '⚠️ تنبيه:<br>الرجاء اختيار اسم الطالب من القائمة أولاً.');
+            return;
+        }
+
+        if (!quickInputVal || quickInputVal.length === 0) {
+            showModal('alertModalRed', '⚠️ تنبيه خطأ في الإدخال:<br>لم تقم بإضافة أي إجابات للطالب في حقل الإدخال الفوري! يرجى كتابة أو لصق الإجابات أولاً.');
+            return;
+        }
+
+        try {
+            let answersDetails = [];
+            let score = 0;
+            const currentQuestions = modelsData[currentModelKey].questions;
+            const labelsMap = {'A':'أ', 'B':'ب', 'C':'ج', 'D':'د'};
+            
+            for (let i = 1; i <= 20; i++) {
+                let studentKey = studentAnswersState[i] || 'A'; 
+                let qData = currentQuestions[i-1] || { q: `سؤال ${i}`, options: {A:'أ',B:'ب',C:'ج',D:'د'}, ans:'A' };
+                let correctKey = qData.ans; 
+                let isCorrect = (studentKey === correctKey);
+                if (isCorrect) score++;
+
+                let studentText = qData.options[studentKey] || studentKey;
+                let correctText = qData.options[correctKey] || correctKey;
+
+                answersDetails.push({
+                    qText: qData.q,
+                    studentAns: `(${labelsMap[studentKey]}) ${studentText}`,
+                    correctAns: `(${labelsMap[correctKey]}) ${correctText}`,
+                    isCorrect: isCorrect
+                });
+            }
+
+            let p = Math.round((score / 20) * 100);
+
+            let recordData = {
+                name: studentName,
+                score: score,
+                total: 20,
+                model_id: customModelName,
+                answers: answersDetails,
+                time: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection("alkfaeat_results").add(recordData);
+            
+            showModal('alertModalGreen', `✅ تم اعتماد درجة الطالب: <strong>${studentName}</strong><br>الدرجة النهائية: <strong>${score} من 20 (${p}%)</strong><br><span style="font-size:0.85rem; color:#047857;">تم إرسال التفاصيل لوحة التحكم بنجاح.</span>`);
+
+        } catch (error) {
+            showModal('alertModalRed', "حدث خطأ أثناء فحص أو إرسال البيانات لقاعدة البيانات.");
+        }
     }
 </script>
 
